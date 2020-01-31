@@ -118,10 +118,13 @@ class InceptionNet:
 			tf.Variable(tf.random.normal(shape=[1, 1, 832, 128]))
 		]
 
-		self.linear_weights = tf.Variable(tf.random.normal(shape=[1024, 1]))
-		self.linear_bias = tf.Variable(tf.random.normal(shape=[1024, 1]))
+		self.relu_weights = tf.Variable(tf.random.normal(shape=[1024, 1000]))
+		self.relu_bias = tf.Variable(tf.random.normal(shape=[1000, 1]))
 
-		self.optimizer = tf.optimizers.Adagrad()
+		self.linear_weights = tf.Variable(tf.random.normal(shape=[1000, 168]))
+		self.linear_bias = tf.Variable(tf.random.normal(shape=[168, 1]))
+
+		self.optimizer = tf.optimizers.Adam()
 
 	@staticmethod
 	def _inception_layer(previous_layer, filters):
@@ -186,25 +189,24 @@ class InceptionNet:
 
 		post_inception_pool_3 = nn.avg_pool(inception_9, (7, 7), strides=4, padding="SAME")
 
-		flatten_layer = tf.reshape(tf.keras.backend.flatten(post_inception_pool_3), [input_data.shape[0], 1024])
+		flatten_layer = tf.reshape(tf.keras.backend.flatten(post_inception_pool_3), [1024, input_data.shape[0]])
 
-		# TODO: Downsample into 168 space
-		linear_layer = tf.matmul(tf.transpose(self.linear_weights),
-		                         tf.transpose(flatten_layer)) + self.linear_bias
-		return nn.softmax(linear_layer)
+		relu_layer = nn.relu(tf.matmul(tf.transpose(self.relu_weights),
+		                               flatten_layer) + self.relu_bias)
+		linear_layer = tf.matmul(tf.transpose(self.linear_weights), relu_layer) + self.linear_bias
+		return tf.transpose(nn.relu(linear_layer))
 
 	@staticmethod
 	def _calc_loss(actual, pred):
-		return tf.reduce_sum(actual * tf.math.log(pred) + (1 - actual) * tf.math.log(1 - pred))
+		return tf.reduce_sum(tf.keras.losses.categorical_crossentropy(actual, pred))
 
 	def train(self, data_set, epochs):
 		for i in range(0, epochs):
 			image_set, labels = next(iter(data_set))
-			print(image_set.shape)
 			labels = tf.cast(labels, tf.float32)
 			with tf.GradientTape() as tape:
 				loss = self._calc_loss(labels, self.forward_pass(image_set))
-
+				if i % 100 == 0: print(f"==== LOSS AT {i} is {loss} ====")
 			VARIABLES = [filterer for filters in [self.inception_1_filters,
 			                                      self.inception_2_filters,
 			                                      self.inception_3_filters,
@@ -215,9 +217,8 @@ class InceptionNet:
 			                                      self.inception_8_filters,
 			                                      self.inception_9_filters,
 			                                      ] for filterer in filters]
-			VARIABLES.append(self.linear_weights)
-			VARIABLES.append(self.linear_bias)
+			VARIABLES.append(self.relu_weights)
+			VARIABLES.append(self.relu_bias)
 
 			gradients = tape.gradient(loss, VARIABLES)
 			self.optimizer.apply_gradients(zip(gradients, VARIABLES))
-			print(gradients)
