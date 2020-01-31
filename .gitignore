@@ -1,3 +1,9 @@
+bengaliai-cv19
+train_images.zip
+train_images
+.idea
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
