@@ -98,20 +98,19 @@ def export_images():
 def move_images_into_classes():
 	file_names = os.walk("train_images/")
 	file_names = list(file_names)[0][2]
-	print(train_indices)
+	os.mkdir("train_images/train_set")
 	for file in file_names:
 		indexable = file.replace(".png", '')
 		file_class = train_indices.loc[train_indices.image_id == indexable]["grapheme_root"].values[0]
-		print(file_class)
-		if not os.path.exists(f"train_images/grapheme_root_{file_class}"):
-			os.mkdir(f"train_images/grapheme_root_{file_class}")
-		os.rename(f"train_images/{file}", f"train_images/grapheme_root_{file_class}/{file}")
-		print(file_class)
+		if not os.path.exists(f"train_images/train_set/grapheme_root_{file_class}"):
+			os.mkdir(f"train_images/train_set/grapheme_root_{file_class}")
+		os.rename(f"train_images/{file}", f"train_images/train_set/grapheme_root_{file_class}/{file}")
+
 
 
 IMG_WIDTH = 128
 IMG_HEIGHT = 128
-CLASS_NAMES = [root for root in list(os.walk("train_images"))[0][1]]
+CLASS_NAMES = [root for root in list(os.walk("train_images/train_set"))[0][1]]
 
 
 def get_label(file_path):
@@ -138,11 +137,11 @@ def process_path(file_path):
 	return img, label
 
 
-BATCH_SIZE = 5
+BATCH_SIZE = 1
 
 
 def build_tensorflow_dataset(cache=True, shuffle_buffer_size=1000):
-	data_dir = pathlib.Path("train_images")
+	data_dir = pathlib.Path("train_images/train_set")
 	file_list = tf.data.Dataset.list_files(str(data_dir / '*/*'))
 	AUTOTUNE = tf.data.experimental.AUTOTUNE
 	labeled_ds = file_list.map(process_path, num_parallel_calls=AUTOTUNE)
@@ -165,6 +164,22 @@ def build_tensorflow_dataset(cache=True, shuffle_buffer_size=1000):
 	ds = ds.prefetch(buffer_size=AUTOTUNE)
 
 	return ds
+
+
+def split_train_test():
+	NO_OF_UNIQUE_RAND_NEEDED = 60252
+	generator = np.random.default_rng()
+	images = generator.choice(200839, NO_OF_UNIQUE_RAND_NEEDED, False)
+	if not os.path.exists("train_images/test_set"):
+		os.mkdir("train_images/test_set")
+	for image in images:
+		path = f"Train_{image}.png"
+		indexable = path.replace(".png", '')
+		file_class = train_indices.loc[train_indices.image_id == indexable]["grapheme_root"].values[0]
+		if not os.path.exists(f"train_images/test_set/grapheme_root_{file_class}"):
+			os.mkdir(f"train_images/test_set/grapheme_root_{file_class}")
+		os.rename(f"train_images/{path}", f"train_images/test_set/grapheme_root_{file_class}/{path}")
+
 
 
 # move_images_into_classes()

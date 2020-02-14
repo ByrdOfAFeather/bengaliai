@@ -169,10 +169,13 @@ class InceptionNet:
 		return second_pool
 
 	def forward_pass(self, input_data):
+		input_data = input_data / 255
+
 		pre_inception = InceptionNet._pre_inception_layer(input_data, self.pre_inception_filters)
 
 		inception_1 = InceptionNet._inception_layer(pre_inception, self.inception_1_filters)
 		inception_2 = InceptionNet._inception_layer(inception_1, self.inception_2_filters)
+		# print(inception_2)
 
 		post_inception_pool = InceptionNet._max_pool(inception_2, (3, 3), (2, 2))
 
@@ -193,32 +196,54 @@ class InceptionNet:
 
 		relu_layer = nn.relu(tf.matmul(tf.transpose(self.relu_weights),
 		                               flatten_layer) + self.relu_bias)
-		linear_layer = tf.matmul(tf.transpose(self.linear_weights), relu_layer) + self.linear_bias
-		return tf.transpose(nn.relu(linear_layer))
 
-	@staticmethod
-	def _calc_loss(actual, pred):
-		return tf.reduce_sum(tf.keras.losses.categorical_crossentropy(actual, pred))
+		dropout_layer = nn.dropout(relu_layer, .4)
+
+		linear_layer = tf.matmul(tf.transpose(self.linear_weights), dropout_layer) + self.linear_bias
+		return nn.softmax(tf.transpose(nn.tanh(linear_layer)))
+
+	# @staticmethod
+	# def _calc_loss(actual, pred):
+	# 	print(pred.shape)
+	# 	print(actual.shape)
+	# 	return
 
 	def train(self, data_set, epochs):
-		for i in range(0, epochs):
-			image_set, labels = next(iter(data_set))
-			labels = tf.cast(labels, tf.float32)
-			with tf.GradientTape() as tape:
-				loss = self._calc_loss(labels, self.forward_pass(image_set))
-				if i % 100 == 0: print(f"==== LOSS AT {i} is {loss} ====")
-			VARIABLES = [filterer for filters in [self.inception_1_filters,
-			                                      self.inception_2_filters,
-			                                      self.inception_3_filters,
-			                                      self.inception_4_filters,
-			                                      self.inception_5_filters,
-			                                      self.inception_6_filters,
-			                                      self.inception_7_filters,
-			                                      self.inception_8_filters,
-			                                      self.inception_9_filters,
-			                                      ] for filterer in filters]
-			VARIABLES.append(self.relu_weights)
-			VARIABLES.append(self.relu_bias)
+		image_set, labels = next(iter(data_set))
 
-			gradients = tape.gradient(loss, VARIABLES)
-			self.optimizer.apply_gradients(zip(gradients, VARIABLES))
+		for i in range(0, epochs):
+			labels = tf.cast(labels, tf.int64)
+			with tf.GradientTape() as tape:
+				predictions = self.forward_pass(image_set)
+
+				prediction = tf.argmax(predictions, 1)
+				equality = tf.equal(prediction, tf.argmax(labels, 1))
+				accuracy = tf.reduce_mean(tf.cast(equality, tf.float32))
+				print("This is accuracy", accuracy)
+
+				loss = tf.keras.losses.categorical_crossentropy(labels, predictions)
+
+				print(tape.watched_variables())
+				print("This is loss", loss)
+
+			# VARIABLES = [filterer for filters in [self.inception_1_filters,
+			#                                       self.inception_2_filters,
+			#                                       self.inception_3_filters,
+			#                                       self.inception_4_filters,
+			#                                       self.inception_5_filters,
+			#                                       self.inception_6_filters,
+			#                                       self.inception_7_filters,
+			#                                       self.inception_8_filters,
+			#                                       self.inception_9_filters,
+			#                                       ] for filterer in filters]
+			# VARIABLES.append(self.relu_weights)
+			# VARIABLES.append(self.relu_bias)
+
+			gradients = tape.gradient(loss, self.linear_weights)
+			if i % 1 == 0:
+				print(gradients.shape)
+				# for index, grad in enumerate(gradients):
+				# 	print(index)
+				# 	print(grad)
+			print(gradients)
+			self.optimizer.apply_gradients(zip(gradients, self.linear_weights))
